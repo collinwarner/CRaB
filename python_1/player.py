@@ -146,7 +146,7 @@ class Player(Bot):
 
         if CheckAction in legal_actions:  # check-call
             return CheckAction()
-        return CallAction
+        return CallAction()
 
 
 if __name__ == '__main__':
