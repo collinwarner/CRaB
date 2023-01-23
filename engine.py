@@ -202,7 +202,9 @@ class Player():
                     server_socket.settimeout(CONNECT_TIMEOUT)
                     server_socket.listen()
                     port = server_socket.getsockname()[1]
-                    proc = subprocess.Popen(self.commands['run'] + [str(port)],
+                    x = input(f"path {self.path} port {port}")
+                    if (x == "y"):
+                        proc = subprocess.Popen(self.commands['run'] + [str(port)],
                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                             cwd=self.path)
                     self.bot_subprocess = proc
