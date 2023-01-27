@@ -62,10 +62,3 @@ print()
 
 print(evaluator.evaluate(board[:3], player1_hand))
 
-
-
-import eval7
-
-
-def hole_hands_table():
-    
