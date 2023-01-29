@@ -15,8 +15,8 @@ class Player(Bot):
     A pokerbot.
     '''
 
-    ALL_RANGE = 15
-    CALL_RANGE = 25
+    #ALL_RANGE = 15
+    #CALL_RANGE = 25
     
     def __init__(self):
         '''
@@ -32,9 +32,12 @@ class Player(Bot):
         # Sort by strength of the hole cards
         hole_cards = df['Holes']
         strengths = df['Strengths']
-
+        #print(f"{len(hole_cards), len(strengths)}")
+        #print(hole_cards)
+        #print(strengths)
         hole_strengths = []
 
+        #print(len(df))
         for idx in range(len(df)):
             hole_strengths.append((hole_cards[idx], strengths[idx]))
 
@@ -45,12 +48,15 @@ class Player(Bot):
         # for idx in range(len(hole_strengths)):
         #     print("HOLE CARDS: ", hole_strengths[idx][0], ":", hole_strengths[idx][1])
         
-        for idx in range(self.ALL_RANGE):
+        for idx in range(len(df)//10):
             self.pre_flop_cards_all.add(hole_strengths[idx][0])
-
+        #print(f"preflop card size {len(self.pre_flop_cards_all)}")
+        #print(self.pre_flop_cards_all)
         self.pre_flop_cards_call = set()
-        for idx in range(self.ALL_RANGE, self.CALL_RANGE):
+        for idx in range(len(df)//10, len(df)*4//10):
             self.pre_flop_cards_call.add(hole_strengths[idx][0])
+        #print(f"preflop card size {len(self.pre_flop_cards_call)}")
+        #print(self.pre_flop_cards_call)
 
     def handle_new_round(self, game_state, round_state, active):
         '''
@@ -164,7 +170,6 @@ class Player(Bot):
 
             my_preflop_range = my_cards[0][0] + my_cards[1][0] + range_ending
             my_preflop_range_alt = my_cards[1][0] + my_cards[0][0] + range_ending
-
             if ((my_preflop_range in self.pre_flop_cards_all) or (my_preflop_range_alt in self.pre_flop_cards_all)) and RaiseAction in legal_actions:
                 min_raise, max_raise = round_state.raise_bounds()
                 max_cost = max_raise - my_pip
@@ -177,12 +182,15 @@ class Player(Bot):
                     my_action = CheckAction()
                 return my_action 
             elif (((my_preflop_range in self.pre_flop_cards_all) or (my_preflop_range_alt in self.pre_flop_cards_all)) or\
-                    ((my_preflop_range in self.pre_flop_cards_call) or (my_preflop_range_alt in self.pre_flop_cards_call))) and\
-                    CheckAction in legal_actions:
-                # print("check")
-                return CheckAction()
-            else:
-                # print("fold")
+                    ((my_preflop_range in self.pre_flop_cards_call) or (my_preflop_range_alt in self.pre_flop_cards_call))):
+                if CheckAction in legal_actions:
+                    print("check")
+                    return CheckAction()
+                if CallAction in legal_actions:
+                    print("call")
+                    return CallAction();
+            elif FoldAction in legal_actions:
+                print("fold")
                 return FoldAction()
 
         if CheckAction in legal_actions:  # check-call
