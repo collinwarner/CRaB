@@ -5,9 +5,8 @@ import socket
 
 from datetime import datetime
 from typing import List, Tuple
-from multiprocessing import Process
+from multiprocessing import Process, Manager
 from threading import Lock
-from elosports.elo import Elo
 
 from engine import Game, Player, STATUS
 from config import *
@@ -20,7 +19,9 @@ TOURNAMENT_RESULT_PATH = 'tournament_results'
 #         ('cpp_skeleton', './cpp_skeleton')]
 
 BOTS = [('A', './preflop_hand'),
-        ('B', './week_3_bot')]
+        ('B', './week_3_bot'),
+        ('C', './python_skeleton'),
+        ('D', './week_3_bot')]
 # Used to represent that a bot is out for a round
 DUMMY_BOT_NAME = 'dummy_bot'
 DUMMY_BOT_PATH = './'
@@ -28,23 +29,51 @@ DUMMY_BOT = (DUMMY_BOT_NAME, DUMMY_BOT_PATH)
 
 NUM_CHAR_BOT_NAME = 25
 
+class Elo:
+    """
+    Manages players' ELO rating.
+    """
+    def __init__(self, k, g, thread_manager):
+        self.k 				= k
+        self.g 				= g
+        self.thread_manager = thread_manager
+        self.rating_dict  	= self.thread_manager.dict()
+
+    def get_ratings(self):
+        return reversed(sorted(self.rating_dict.items(),
+                                key = lambda elo: round(elo[1])))
+
+    def add_player(self, name, rating):
+        self.rating_dict[name] = rating
+
+    def expect_result(self, player_1, player_2):
+        exp = (player_2-player_1)/400.0
+        return 1/((10.0**(exp))+1)
+
+    def update(self, winner, loser):
+        result = self.expect_result(self.rating_dict[winner], self.rating_dict[loser])
+        self.rating_dict[winner] = self.rating_dict[winner] + (self.k*self.g)*(1 - result)  
+        self.rating_dict[loser] = self.rating_dict[loser] + (self.k*self.g)*(0 - (1 -result))
+
 class Tournament_Stats():
     WON = 'won_against'
     LOST = 'lost_against'
 
+    NUM_WS = 'num_wins'
+    NUM_LS = 'num_losses'
+
     # ELO parameters
     K_FACTOR = 16
     G_VALUE = 1
-    HOMEFIELD = 0
-    STARTING_RATING = 1200
-    WINNER_HOME = False
+    STARTING_RATING = 1500
 
-    def __init__(self):
+    def __init__(self, ):
         # Initialize mutex to update stats during the tournament
         # as games will be spawned concurrently
         self.mutex = Lock()
-        self.stats = None
+        self.thread_manager = None
         self.elo_league = None
+        self.stats = None
 
     def init_stats(self, bots: List[Tuple]):
         '''
@@ -52,12 +81,21 @@ class Tournament_Stats():
         frequencies between bots. Additionally, it initializes the ELO for all
         of the bots.
         '''
+        self.thread_manager = Manager()
+        self.elo_league = Elo(self.K_FACTOR, self.G_VALUE, self.thread_manager)
         self.stats = {}
-        self.elo_league = Elo(k = self.K_FACTOR, g = self.G_VALUE, homefield = self.HOMEFIELD)
+        
+        # Create a shared dicts for threads
         for bot_name, _ in bots:
-            self.stats[bot_name] = {'won_against': {}, 'lost_against': {}}
+            if bot_name == DUMMY_BOT_NAME:
+                continue
+            self.stats[bot_name] = self.thread_manager.dict()
+            self.stats[bot_name][self.WON] = self.thread_manager.dict()
+            self.stats[bot_name][self.LOST] = self.thread_manager.dict()
+            self.stats[bot_name][self.NUM_WS] = 0
+            self.stats[bot_name][self.NUM_LS] = 0
             # Add bot to the elo league object
-            self.elo_league.addPlayer(bot_name, rating = self.STARTING_RATING)
+            self.elo_league.add_player(bot_name, self.STARTING_RATING)
 
     def acquire_stats(self):
         self.mutex.acquire()
@@ -70,36 +108,38 @@ class Tournament_Stats():
         if loser not in self.stats[winner][self.WON]:
             self.stats[winner][self.WON][loser] = 0
         self.stats[winner][self.WON][loser] += 1
+        self.stats[winner][self.NUM_WS] += 1
 
         # Update loser
         if winner not in self.stats[loser][self.LOST]:
             self.stats[loser][self.LOST][winner] = 0
         self.stats[loser][self.LOST][winner] += 1
+        self.stats[loser][self.NUM_LS] += 1
 
     def _update_elo(self, winner: str, loser: str):
-        self.elo_league.gameOver(winner, loser, self.WINNER_HOME)
+        self.elo_league.update(winner, loser)
 
     def update(self, winner: str, loser: str):
         self._update_stats(winner, loser)
         self._update_elo(winner, loser)
 
-    def print_stats(self):
-        # TODO: Print stats about the players
-
-        print(str(self.stats) + "\n")
+    def get_stats_str(self):
+        # TODO: Print more stats about the players
 
         # Print elo-related stats
-        if self.elo_league:
-            elo_str = "ELO Ranking\n"
-            sorted_bots_elo = reversed(sorted(self.elo_league.ratingDict.items(),
-                                        key = lambda elo: round(elo[1])))
-            ranking_num = 1
-            for bot in sorted_bots_elo:
-                elo_str += "{}) {}: {}\n".format(ranking_num, bot[0], round(bot[1]))
-                ranking_num += 1
-            print(elo_str)
-        else:
-            print("ERROR: Did no print ELO ranking since it has not been initialized.")
+        if not self.elo_league:
+            return "ERROR: Did no print ELO ranking since it has not been initialized."
+        
+        elo_str = "\nELO Ranking\n"
+        elo_str += f"{'Rank' : <8}{'Bot' : <20}{'ELO' : ^10}{'Wins' : ^10}{'Losses' : ^10}\n"
+        bots_elo = self.elo_league.get_ratings()
+        ranking_num = 1
+        for bot_name, bot_elo in bots_elo:
+            num_ws = self.stats[bot_name][self.NUM_WS]
+            num_ls = self.stats[bot_name][self.NUM_LS]
+            elo_str += f"{str(ranking_num) + ')'  : <8}{bot_name : <20}{round(bot_elo) : ^10}{num_ws : ^10}{num_ls : ^10}\n"
+            ranking_num += 1
+        return elo_str
 
 class Tournament_Player(Player):
     def stop(self, output_dir: str):
@@ -175,20 +215,22 @@ class Tournament_Game(Game):
         self.log.append('Final' + STATUS(players))
         for player in players:
             player.stop(self.log_dir)
-        
-        # Write the log from the game
-        name = 'gamelog_' + players[0].name + '_' + players[1].name + '.txt'
-        full_log_path = os.path.join(self.log_dir, name)
-        with open(full_log_path, 'w') as log_file:
-            log_file.write('\n'.join(self.log))
 
         # Get the winner of the game
         winner, loser = self.get_winner_loser(players)
+        
+        # Write the log from the game
+        name = 'gamelog_' + winner + '_' + loser + '.txt'
+        full_log_path = os.path.join(self.log_dir, name)
+        with open(full_log_path, 'w') as log_file:
+            log_file.write('\n'.join(self.log))
+        
         # Return early if there's a tie
+        # That is, don't update the elo rating
         if winner == None:
             return
 
-        # Update statistics
+        # Update stats using a mutex
         self.stats_obj.acquire_stats()
         self.stats_obj.update(winner, loser)
         self.stats_obj.release_stats()
@@ -239,6 +281,9 @@ class Tournament_Manager():
         print("Starting tournament '{}'...".format(self.get_name()))
         print(bots_info)
 
+    def get_stats_str(self):
+        return self.stats.get_stats_str()
+
     def prepare_dir(self, path):
         if not os.path.exists(path):
             os.makedirs(path)
@@ -281,48 +326,47 @@ class Tournament_Manager():
         return tournament_schedule
 
     def run(self):
+        self.print_starting_msg()
+
         # Generate the tournament schedules
-        print("Running tournament...\n")
         tournament_schedule = self.create_tournament_schedule()
         
         for generation_num in range(1, self.NUM_GAMES_PER_PAIR + 1):
-            print("Round robin generation " + str(generation_num))
+            print(25*'*' + "Round robin generation " + str(generation_num) + 25*'*')
             # Shuffle the tournament schedule to add variation
             random.shuffle(tournament_schedule)
             for round_num, round_schedule in enumerate(tournament_schedule):
-                print("Round num ", round_num + 1)
+                print(25*'-' + "Round num ", str(round_num + 1) + 25*'-')
                 round_name = self.GENERATION_STR + str(generation_num) + self.ROUND_DIR_PREFIX + str(round_num + 1)
                 round_dir = os.path.join(self.get_path(), round_name)
 
                 self.prepare_dir(round_dir)
                 round_game_procs = [Process(target=Tournament_Game(round_dir, self.stats).run, args=([player_1, player_2],))\
                         for player_1, player_2 in round_schedule]
-                # Launch the games in parallel
+                # Launch the games from one round in parallel
                 for game_proc in round_game_procs:
                     game_proc.start()
                 # Wait for the games to finish
                 for game_proc in round_game_procs:
                     game_proc.join()
+
+                # Print stats at the end of the round
+                print(self.get_stats_str())
             print()
 
+        # Save final elo as a txt file
+        final_results_path = os.path.join(self.path, 'results.txt')
+        with open(final_results_path, 'w') as final_results:
+            final_results.write(self.get_stats_str())
+        
 if __name__ == '__main__':
     # By default, the name of the tournament is the current time
     tournament_name = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
     current_dir = os.getcwd()
     tournament_path = os.path.join(current_dir,
         TOURNAMENT_RESULT_PATH, tournament_name)
-
-    # Prepare the directory to hold results
-    # prepare_dir(tournament_path)
     
     tournament_manager = Tournament_Manager(tournament_name,
         tournament_path, BOTS)
 
     tournament_manager.run()
-    # tournament_manager.print_starting_msg()
-
-    # tournament_manager.stats.acquire_stats()
-
-    # tournament_manager.stats.print_stats()
-
-    # tournament_manager.stats.release_stats()
