@@ -8,15 +8,15 @@ from skeleton.bot import Bot
 from skeleton.runner import parse_args, run_bot
 
 import pandas as pd
-
+import math
 
 class Player(Bot):
     '''
     A pokerbot.
     '''
 
-    #ALL_RANGE = 15
-    #CALL_RANGE = 25
+    ALL_PERCENT = .12
+    CALL_PERCENT = .18
     
     def __init__(self):
         '''
@@ -32,28 +32,22 @@ class Player(Bot):
         # Sort by strength of the hole cards
         hole_cards = df['Holes']
         strengths = df['Strengths']
-        #print(f"{len(hole_cards), len(strengths)}")
-        #print(hole_cards)
-        #print(strengths)
         hole_strengths = []
 
-        #print(len(df))
         for idx in range(len(df)):
             hole_strengths.append((hole_cards[idx], strengths[idx]))
 
         hole_strengths.sort(reverse=True, key=lambda item: item[1])
 
         self.pre_flop_cards_all = set()
-
-        # for idx in range(len(hole_strengths)):
-        #     print("HOLE CARDS: ", hole_strengths[idx][0], ":", hole_strengths[idx][1])
         
-        for idx in range(len(df)//10):
+        for idx in range(math.floor(len(df)*self.ALL_PERCENT)):
             self.pre_flop_cards_all.add(hole_strengths[idx][0])
         #print(f"preflop card size {len(self.pre_flop_cards_all)}")
         #print(self.pre_flop_cards_all)
         self.pre_flop_cards_call = set()
-        for idx in range(len(df)//10, len(df)*4//10):
+        for idx in range(math.floor(len(df)*self.ALL_PERCENT),
+                math.floor(len(df)*self.CALL_PERCENT)):
             self.pre_flop_cards_call.add(hole_strengths[idx][0])
         #print(f"preflop card size {len(self.pre_flop_cards_call)}")
         #print(self.pre_flop_cards_call)

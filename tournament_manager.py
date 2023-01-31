@@ -19,9 +19,7 @@ TOURNAMENT_RESULT_PATH = 'tournament_results'
 #         ('cpp_skeleton', './cpp_skeleton')]
 
 BOTS = [('A', './preflop_hand'),
-        ('B', './week_3_bot'),
-        ('C', './python_skeleton'),
-        ('D', './week_3_bot')]
+        ('B', './week_3_bot')]
 # Used to represent that a bot is out for a round
 DUMMY_BOT_NAME = 'dummy_bot'
 DUMMY_BOT_PATH = './'
@@ -241,7 +239,7 @@ class Tournament_Manager():
     ROUND_DIR_PREFIX = '_round_'
 
     # Tournament Parameters
-    NUM_GAMES_PER_PAIR = 2
+    NUM_GAMES_PER_PAIR = 100
 
     def __init__(self, name: str, path: str, bots: List[Tuple]):
         self.name = name
