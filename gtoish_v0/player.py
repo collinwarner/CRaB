@@ -188,10 +188,14 @@ class Player(Bot):
         Card.print_pretty_cards(board_cards)
         print(f"ranking {hand_strength_percentage}")
 
+
+        print("Continue cost: ", continue_cost)
+        print("My pip:", my_pip)
+        print("Opp pip:", opp_pip)
+
         if hand_strength_percentage > .9:
             return RaiseAction(my_stack)
-        elif CheckAction in legal_actions:  # check-call
-            # print("final check")
+        elif CheckAction in legal_actions:
             return CheckAction()
         elif hand_strength_percentage > (continue_cost/(continue_cost + my_pip + opp_pip)):
             return CallAction()
