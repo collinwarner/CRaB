@@ -18,7 +18,7 @@ TOURNAMENT_RESULT_PATH = 'tournament_results'
 #         ('cpp_skeleton', './cpp_skeleton'),
 #         ('cpp_skeleton', './cpp_skeleton')]
 
-BOTS = [('A', './preflop_hand'),
+BOTS = [('A', './gtoish'),
         ('B', './week_3_bot')]
 # Used to represent that a bot is out for a round
 DUMMY_BOT_NAME = 'dummy_bot'
