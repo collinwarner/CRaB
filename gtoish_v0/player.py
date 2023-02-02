@@ -159,9 +159,10 @@ class Player(Bot):
             if ((my_preflop_range in self.pre_flop_cards_all) or (my_preflop_range_alt in self.pre_flop_cards_all)) and RaiseAction in legal_actions:
                 min_raise, max_raise = round_state.raise_bounds()
                 max_cost = max_raise - my_pip
-
+                if (my_pip > 0):
+                    return CallAction()
                 if max_cost <= my_stack: #make sure the max_cost is something we can afford! Must have at least this much left after our other costs
-                    my_action = RaiseAction(max_raise*.5) #GO ALL IN!!!
+                    my_action = RaiseAction(min(my_stack, int(min_raise*3))) #GO ALL IN!!!
                 elif CallAction in legal_actions: # check-call
                     my_action = CallAction()
                 else:
@@ -170,6 +171,8 @@ class Player(Bot):
             elif (((my_preflop_range in self.pre_flop_cards_all) or (my_preflop_range_alt in self.pre_flop_cards_all)) or\
                     ((my_preflop_range in self.pre_flop_cards_call) or (my_preflop_range_alt in self.pre_flop_cards_call))):
                 
+                if (my_pip > 0):
+                    return FoldAction()
                 return RaiseAction(min_raise)
                 """
                 if CheckAction in legal_actions:
@@ -199,41 +202,49 @@ class Player(Bot):
         #print("Opp pip:", opp_pip)
         if (my_stack == 0):
             return CheckAction()
-        p = hand_strength_percentage
-        pot = my_contribution + opp_contribution
-        pot_odds = continue_cost / (continue_cost + pot)
-        if (p - pot_odds < 0):
-            return FoldAction()
+        #p = hand_strength_percentage
+        #pot = my_contribution + opp_contribution
+        #pot_odds = continue_cost / (continue_cost + pot)
+        #if (p - pot_odds < 0 or (p < 0.3 and continue_cost > 0)):
+        #    return FoldAction()
 
+        """
         if (my_pip > 0):
             if (p > .95):
-                return RaiseAction(my_stack)
-            elif (p > .8):
+                return RaiseAction(min(my_stack, continue_cost*2))
+            elif (p < .8 and continue_cost / my_pip > 3):
+                return FoldAction()
+            elif (p > .7):
                 return CallAction()
             else:
                 return FoldAction()
         if (p > .9):
-            return RaiseAction(min(my_stack, pot))
+            return RaiseAction(min(my_stack, max(int(.5*pot), min_raise)))
+        elif continue_cost == 0 and p > .8:
+            return RaiseAction(min(my_stack, max(int(.5*pot), min_raise)))
+        elif continue_cost == 0:
+            return CheckAction()
+        elif my_pip > 0 and continue_cost/my_pip > 3:
+            return FoldAction()
         else:
-            return CheckAction() if continue_cost == 0 else CallAction()
-
+            return CallAction()
         """
         pot = my_contribution + opp_contribution
-        stack = my_stack
+        stack = pot * 20 
         p = hand_strength_percentage
-        root = math.sqrt(4*(pot**2)*(stack**2) - 4*pot*(stack**2) + stack**2 + 2*pot*stack + pot**2) 
-        out_root = -pot - stack + 2 * pot * stack
-        fraction_stack = min(1, max(out_root - root, out_root + root)/(2*stack))
+        root = math.sqrt(4*(p**2)*(stack**2) - 4*p*(stack**2) + stack**2 + 2*pot*stack + pot**2) 
+        out_root = -pot - stack + 2 * p * stack
+        fraction_stack = .2 * min(1, max(out_root - root, out_root + root)/(2*stack))
+        print(f"(fraction_stack) = {fraction_stack}")
         bet_size = fraction_stack * stack
 
         if bet_size >= continue_cost: 
             if (bet_size < min_raise):
                 return CallAction() if continue_cost > 0 else CheckAction()
-            return RaiseAction(bet_size)
+            return RaiseAction(min(int(bet_size), max_raise))
         elif CheckAction in legal_actions:
             return CheckAction()
         else:
             return FoldAction()
-        """
 if __name__ == '__main__':
     run_bot(Player(), parse_args())
