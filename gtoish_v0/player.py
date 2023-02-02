@@ -74,7 +74,7 @@ class Player(Bot):
         #round_num = game_state.round_num  # the round number from 1 to NUM_ROUNDS
         my_cards = round_state.hands[active]  # your cards
         self.hole_cards = Card.hand_to_binary(my_cards) 
-        Card.print_pretty_cards(self.hole_cards)
+        #Card.#print_pretty_cards(self.hole_cards)
         #big_blind = bool(active)  # True if you are the big blind
 
     def handle_round_over(self, game_state, terminal_state, active):
@@ -120,6 +120,7 @@ class Player(Bot):
         continue_cost = opp_pip - my_pip  # the number of chips needed to stay in the pot
         my_contribution = STARTING_STACK - my_stack  # the number of chips you have contributed to the pot
         opp_contribution = STARTING_STACK - opp_stack  # the number of chips your opponent has contributed to the pot
+        min_raise, max_raise = 0, 0
         if RaiseAction in legal_actions:
            min_raise, max_raise = round_state.raise_bounds()  # the smallest and largest numbers of chips for a legal bet/raise
            min_cost = min_raise - my_pip  # the cost of a minimum bet/raise
@@ -160,7 +161,7 @@ class Player(Bot):
                 max_cost = max_raise - my_pip
 
                 if max_cost <= my_stack: #make sure the max_cost is something we can afford! Must have at least this much left after our other costs
-                    my_action = RaiseAction(max_raise) #GO ALL IN!!!
+                    my_action = RaiseAction(max_raise*.5) #GO ALL IN!!!
                 elif CallAction in legal_actions: # check-call
                     my_action = CallAction()
                 else:
@@ -168,39 +169,71 @@ class Player(Bot):
                 return my_action 
             elif (((my_preflop_range in self.pre_flop_cards_all) or (my_preflop_range_alt in self.pre_flop_cards_all)) or\
                     ((my_preflop_range in self.pre_flop_cards_call) or (my_preflop_range_alt in self.pre_flop_cards_call))):
+                
+                return RaiseAction(min_raise)
+                """
                 if CheckAction in legal_actions:
-                    print("check")
+                    #print("check")
                     return CheckAction()
                 if CallAction in legal_actions:
-                    print("call")
+                    #print("call")
                     return CallAction();
+                """
             elif FoldAction in legal_actions:
-                print("fold")
+                #print("fold")
                 return FoldAction()
             elif CheckAction in legal_actions:
                 return CheckAction()
             else:
-                print(f"street {street} legal actions {legal_actions}")
+                #print(f"street {street} legal actions {legal_actions}")
                 raise Exception("Should not get here")
         board_cards = Card.hand_to_binary(round_state.deck[:street])  # the board cards
         hand_strength_percentage = 1 - self.oracle.get_five_card_rank_percentage(self.oracle._seven(self.hole_cards + board_cards))
-        print("cards")
-        Card.print_pretty_cards(board_cards)
-        print(f"ranking {hand_strength_percentage}")
+        #print("cards")
+        #Card.#print_pretty_cards(board_cards)
+        #print(f"ranking {hand_strength_percentage}")
 
 
-        print("Continue cost: ", continue_cost)
-        print("My pip:", my_pip)
-        print("Opp pip:", opp_pip)
-
-        if hand_strength_percentage > .9:
-            return RaiseAction(my_stack)
-        elif CheckAction in legal_actions:
+        #print("Continue cost: ", continue_cost)
+        #print("My pip:", my_pip)
+        #print("Opp pip:", opp_pip)
+        if (my_stack == 0):
             return CheckAction()
-        elif hand_strength_percentage > (continue_cost/(continue_cost + my_pip + opp_pip)):
-            return CallAction()
-        else:
+        p = hand_strength_percentage
+        pot = my_contribution + opp_contribution
+        pot_odds = continue_cost / (continue_cost + pot)
+        if (p - pot_odds < 0):
             return FoldAction()
 
+        if (my_pip > 0):
+            if (p > .95):
+                return RaiseAction(my_stack)
+            elif (p > .8):
+                return CallAction()
+            else:
+                return FoldAction()
+        if (p > .9):
+            return RaiseAction(min(my_stack, pot))
+        else:
+            return CheckAction() if continue_cost == 0 else CallAction()
+
+        """
+        pot = my_contribution + opp_contribution
+        stack = my_stack
+        p = hand_strength_percentage
+        root = math.sqrt(4*(pot**2)*(stack**2) - 4*pot*(stack**2) + stack**2 + 2*pot*stack + pot**2) 
+        out_root = -pot - stack + 2 * pot * stack
+        fraction_stack = min(1, max(out_root - root, out_root + root)/(2*stack))
+        bet_size = fraction_stack * stack
+
+        if bet_size >= continue_cost: 
+            if (bet_size < min_raise):
+                return CallAction() if continue_cost > 0 else CheckAction()
+            return RaiseAction(bet_size)
+        elif CheckAction in legal_actions:
+            return CheckAction()
+        else:
+            return FoldAction()
+        """
 if __name__ == '__main__':
     run_bot(Player(), parse_args())
